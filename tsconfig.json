@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    /* Estándar de Lenguaje y Entorno */
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ESNext"],
+
+    /* Rigurosidad y Calidad de Código */
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowImportingTsExtensions": true,
+
+    /* noEmit: true → outDir, declaration y sourceMap eliminados
+       (eran contradictorios: con noEmit no se emite ningún archivo) */
+    "noEmit": true,
+
+    /* Estructura */
+    "rootDir": "src",
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}
