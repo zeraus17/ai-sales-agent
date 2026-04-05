@@ -4,9 +4,10 @@ import TurndownService from "turndown";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as dotenv from "dotenv";
 import type { LandingState } from "./state.js";
+import { buscarProducto, guardarProducto, initCollection } from "../memory/vectorStore.js";
 
 dotenv.config();
-
+initCollection().catch(console.error);
 const turndown = new TurndownService();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 
@@ -34,6 +35,23 @@ export async function investigadorNode(state: LandingState): Promise<Partial<Lan
   let markdown = "";
   const imagenes: string[] = [];
 
+  // PASO 1: Buscar en Vector DB primero
+  if (state.url_referencia) {
+    const cached = await buscarProducto(state.url_referencia);
+    if (cached) {
+      console.log("[Investigador] Cache hit en Qdrant:", cached.producto);
+      const investigacion: Record<string, unknown> = {
+        fuente:         "vector-db",
+        url:            state.url_referencia,
+        descripcion:    cached.descripcion,
+        costo_estimado: cached.costo_estimado,
+        markdown:       cached.markdown,
+      };
+      return { producto: cached.producto, investigacion };
+    }
+  }
+
+  // PASO 2: Si no está en Vector DB, hacer scraping
   if (state.url_referencia) {
     try {
       const { data: html } = await axios.get(state.url_referencia, {
@@ -45,7 +63,6 @@ export async function investigadorNode(state: LandingState): Promise<Partial<Lan
       });
 
       const $ = cheerio.load(html);
-
       const bodyHtml = $("body").html() ?? "";
       markdown = turndown.turndown(bodyHtml).slice(0, 3000);
 
@@ -77,9 +94,8 @@ export async function investigadorNode(state: LandingState): Promise<Partial<Lan
           $(el).attr("src") ??
           $(el).attr("data-src") ??
           $(el).attr("data-lazy-src");
-          if (!src) return;
-          if (src.startsWith("data:")) return;
         if (!src) return;
+        if (src.startsWith("data:")) return;
         const width  = parseInt($(el).attr("width")  ?? "0");
         const height = parseInt($(el).attr("height") ?? "0");
         if (width > 0 && width < 100) return;
@@ -113,6 +129,17 @@ export async function investigadorNode(state: LandingState): Promise<Partial<Lan
     costo_estimado: costoEstimado,
     markdown,
   };
+
+  // PASO 3: Guardar en Vector DB para futuros usuarios
+  if (state.url_referencia && producto) {
+    await guardarProducto({
+      url:            state.url_referencia,
+      producto,
+      descripcion:    String(investigacion.descripcion),
+      markdown,
+      costo_estimado: costoEstimado,
+    });
+  }
 
   return { producto, investigacion, imagenes };
 }
