@@ -3,7 +3,7 @@ import * as cheerio from "cheerio";
 import TurndownService from "turndown";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as dotenv from "dotenv";
-import type { LandingState } from "./state.ts";
+import type { LandingState } from "./state.js";
 
 dotenv.config();
 

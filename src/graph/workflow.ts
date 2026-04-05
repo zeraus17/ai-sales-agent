@@ -1,13 +1,13 @@
-import { StateGraph, START, END, MemorySaver } from "@langchain/langgraph";
-import { LandingStateAnnotation } from "./state.ts";
+﻿import { StateGraph, START, END, MemorySaver } from "@langchain/langgraph";
+import { LandingStateAnnotation } from "./state.js";
 import {
   investigadorNode,
   estrategaNode,
   copywriterNode,
   arquitectoNode,
-} from "./nodes.ts";
+} from "./nodes.js";
 
-// Memoria persistente mientras el proceso esté vivo
+// Memoria persistente mientras el proceso estÃ© vivo
 const memory = new MemorySaver();
 
 const workflow = new StateGraph(LandingStateAnnotation)

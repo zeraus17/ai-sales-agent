@@ -1,7 +1,7 @@
 ﻿import express, { type Request, type Response } from "express";
 import { z } from "zod";
-import { engine } from "./graph/workflow.ts";
-import { responseSchema } from "./schema/response.ts";
+import { engine } from "./graph/workflow.js";
+import { responseSchema } from "./schema/response.js";
 
 const app = express();
 app.use(express.json());
