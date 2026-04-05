@@ -51,6 +51,7 @@ app.post("/api/v1/generate-landing", async (req: Request, res: Response) => {
       copy_hero:        result.copy_hero        || "",
       precio_calculado: precioFinal,
       beneficios:       result.beneficios       || [],
+      imagenes:         result.imagenes         || [],
     });
 
     return res.json(finalOutput);

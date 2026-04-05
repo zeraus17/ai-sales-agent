@@ -31,7 +31,8 @@ export async function investigadorNode(state: LandingState): Promise<Partial<Lan
   let producto: string | null = null;
   let descripcionRaw: string | null = null;
   let costoEstimado = 30;
-let markdown = "";
+  let markdown = "";
+  const imagenes: string[] = [];
 
   if (state.url_referencia) {
     try {
@@ -40,12 +41,11 @@ let markdown = "";
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
           "Accept-Language": "es-ES,es;q=0.9",
-                  },
+        },
       });
 
       const $ = cheerio.load(html);
 
-      // Convertir HTML a Markdown limpio para Gemini
       const bodyHtml = $("body").html() ?? "";
       markdown = turndown.turndown(bodyHtml).slice(0, 3000);
 
@@ -54,6 +54,7 @@ let markdown = "";
         $('meta[name="twitter:title"]').attr("content") ??
         $("title").text().trim() ??
         $("h1").first().text().trim();
+
       const rawDesc =
         $('meta[property="og:description"]').attr("content") ??
         $('meta[name="twitter:description"]').attr("content") ??
@@ -70,8 +71,29 @@ let markdown = "";
       producto = cleanTitle && cleanTitle.length >= 5 ? cleanTitle : null;
       descripcionRaw = rawDesc && rawDesc.length >= 10 ? rawDesc : null;
 
+      $("img").each((_i, el) => {
+        if (imagenes.length >= 3) return false;
+        const src =
+          $(el).attr("src") ??
+          $(el).attr("data-src") ??
+          $(el).attr("data-lazy-src");
+          if (!src) return;
+          if (src.startsWith("data:")) return;
+        if (!src) return;
+        const width  = parseInt($(el).attr("width")  ?? "0");
+        const height = parseInt($(el).attr("height") ?? "0");
+        if (width > 0 && width < 100) return;
+        if (height > 0 && height < 100) return;
+        if (src.endsWith(".svg")) return;
+        const absolute = src.startsWith("http")
+          ? src
+          : `https://${new URL(state.url_referencia).hostname}${src}`;
+        if (!imagenes.includes(absolute)) imagenes.push(absolute);
+      });
+
       console.log("[Investigador] producto ->", producto);
       console.log("[Investigador] costo estimado ->", costoEstimado);
+      console.log("[Investigador] imagenes ->", imagenes);
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -89,10 +111,10 @@ let markdown = "";
     url:            state.url_referencia || null,
     descripcion:    descripcionRaw ?? `Solucion ideal: ${producto}`,
     costo_estimado: costoEstimado,
-      markdown,
-};
-  
-  return { producto, investigacion };
+    markdown,
+  };
+
+  return { producto, investigacion, imagenes };
 }
 
 export async function estrategaNode(state: LandingState): Promise<Partial<LandingState>> {
@@ -118,7 +140,7 @@ export async function copywriterNode(state: LandingState): Promise<Partial<Landi
     (state.investigacion["descripcion"] as string | undefined) ??
     "Producto de alta calidad.";
 
-const markdown =
+  const markdown =
     (state.investigacion["markdown"] as string | undefined) ?? "";
 
   const prompt = `
@@ -142,15 +164,11 @@ Genera UNICAMENTE un JSON valido con esta estructura exacta, sin texto extra, si
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
-
     console.log("[Copywriter] Respuesta Gemini:", text);
-
-        const clean = text.replace(/```json|```/g, "").trim();
+    const clean = text.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean) as { copy_hero: string; beneficios: string[] };
     const copy: Record<string, unknown> = { hero_draft: parsed.copy_hero };
-
-    return {       copy,       copy_hero: parsed.copy_hero,       beneficios: parsed.beneficios     };
-
+    return { copy, copy_hero: parsed.copy_hero, beneficios: parsed.beneficios };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.warn("[Copywriter] Gemini fallo, usando fallback:", msg);
@@ -173,5 +191,6 @@ export async function arquitectoNode(state: LandingState): Promise<Partial<Landi
     copy_hero:        state.copy_hero        || "Tu solucion ideal te espera",
     precio_calculado: state.precio_calculado || 0,
     beneficios:       state.beneficios?.length ? state.beneficios : ["Calidad garantizada"],
+    imagenes:         state.imagenes?.length  ? state.imagenes  : [],
   };
 }
