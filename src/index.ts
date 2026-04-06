@@ -4,8 +4,12 @@ import { WebSocketServer, WebSocket } from "ws";
 import { z } from "zod";
 import { engine } from "./graph/workflow.js";
 import { responseSchema } from "./schema/response.js";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+app.use(express.static(join(__dirname, "..", "src", "public")));
 app.use(express.json());
 
 // Precio base por thread
@@ -75,12 +79,6 @@ app.post("/api/v1/generate-landing", async (req: Request, res: Response) => {
     console.error("Error:", error);
     return res.status(500).json({ error: "Fallo critico en el motor" });
   }
-});
-
-/* ─── HEALTH CHECK ───────────────────────────────────────────────────────── */
-
-app.get("/", (_req: Request, res: Response) => {
-  res.send("Motor 3Pod Core Online - WebSocket activo en ws://localhost:PORT/ws");
 });
 
 /* ─── SERVIDOR HTTP + WEBSOCKET ──────────────────────────────────────────── */
