@@ -3,14 +3,16 @@
 export const LandingStateAnnotation = Annotation.Root({
   prompt:          Annotation<string>({ reducer: (_, b) => b, default: () => "" }),
   url_referencia:  Annotation<string>({ reducer: (_, b) => b, default: () => "" }),
-  producto:        Annotation<string>({ reducer: (_, b) => b, default: () => "" }),
-  copy_hero:       Annotation<string>({ reducer: (_, b) => b, default: () => "" }),
+
+  producto:         Annotation<string>({ reducer: (_, b) => b, default: () => "" }),
+  angulos:          Annotation<{ agresivo: string[]; emocional: string[]; logico: string[] }>({ reducer: (_, b) => b, default: () => ({ agresivo: [], emocional: [], logico: [] }) }),
   precio_calculado: Annotation<number>({ reducer: (_, b) => b, default: () => 0 }),
-  beneficios:      Annotation<string[]>({ reducer: (_, b) => b, default: () => [] }),
-  imagenes:        Annotation<string[]>({ reducer: (_, b) => b, default: () => [] }),
-  investigacion:   Annotation<Record<string, unknown>>({ reducer: (_, b) => b, default: () => ({}) }),
-  estrategia:      Annotation<Record<string, unknown>>({ reducer: (_, b) => b, default: () => ({}) }),
-  copy:            Annotation<Record<string, unknown>>({ reducer: (_, b) => b, default: () => ({}) }),
+  beneficios:       Annotation<string[]>({ reducer: (_, b) => b, default: () => [] }),
+  imagenes:         Annotation<string[]>({ reducer: (_, b) => b, default: () => [] }),
+
+  investigacion: Annotation<Record<string, unknown>>({ reducer: (_, b) => b, default: () => ({}) }),
+  estrategia:    Annotation<Record<string, unknown>>({ reducer: (_, b) => b, default: () => ({}) }),
+  copy:          Annotation<Record<string, unknown>>({ reducer: (_, b) => b, default: () => ({}) }),
 });
 
 export type LandingState = typeof LandingStateAnnotation.State;

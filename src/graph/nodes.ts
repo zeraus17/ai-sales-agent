@@ -161,7 +161,7 @@ export async function estrategaNode(state: LandingState): Promise<Partial<Landin
 }
 
 export async function copywriterNode(state: LandingState): Promise<Partial<LandingState>> {
-  console.log("Copywriter: Generando copy con Gemini...");
+  console.log("Copywriter: Generando 9 angulos con Gemini...");
 
   const descripcion =
     (state.investigacion["descripcion"] as string | undefined) ??
@@ -182,9 +182,18 @@ Instruccion del cliente: ${state.prompt}
 
 Genera UNICAMENTE un JSON valido con esta estructura exacta, sin texto extra, sin backticks:
 {
-  "copy_hero": "frase de impacto de una sola oracion, maximo 15 palabras, orientada a conversion",
-  "beneficios": ["beneficio 1", "beneficio 2", "beneficio 3"]
+  "angulos": {
+    "agresivo": ["frase corta y directa 1", "frase corta y directa 2", "frase corta y directa 3"],
+    "emocional": ["frase que conecta emocionalmente 1", "frase que conecta emocionalmente 2", "frase que conecta emocionalmente 3"],
+    "logico": ["frase basada en datos o razon 1", "frase basada en datos o razon 2", "frase basada en datos o razon 3"]
+  },
+  "beneficios": ["beneficio especifico 1", "beneficio especifico 2", "beneficio especifico 3"]
 }
+
+Agresivo: urgencia, escasez, llamada a la accion directa.
+Emocional: historia, identidad, transformacion personal.
+Logico: datos, comparaciones, ROI, eficiencia.
+Maximo 15 palabras por frase. Todo en español.
 `.trim();
 
   try {
@@ -193,20 +202,23 @@ Genera UNICAMENTE un JSON valido con esta estructura exacta, sin texto extra, si
     const text = result.response.text().trim();
     console.log("[Copywriter] Respuesta Gemini:", text);
     const clean = text.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(clean) as { copy_hero: string; beneficios: string[] };
-    const copy: Record<string, unknown> = { hero_draft: parsed.copy_hero };
-    return { copy, copy_hero: parsed.copy_hero, beneficios: parsed.beneficios };
+    const parsed = JSON.parse(clean) as {
+      angulos: { agresivo: string[]; emocional: string[]; logico: string[] };
+      beneficios: string[];
+    };
+    const copy: Record<string, unknown> = { angulos_draft: parsed.angulos };
+    return { copy, angulos: parsed.angulos, beneficios: parsed.beneficios };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.warn("[Copywriter] Gemini fallo, usando fallback:", msg);
     return {
-      copy:      { hero_draft: `Descubri ${state.producto}` },
-      copy_hero: `Descubri ${state.producto}. ${descripcion}`,
-      beneficios: [
-        "Calidad garantizada",
-        "Envio rapido a todo el pais",
-        "Soporte personalizado incluido",
-      ],
+      copy: {},
+      angulos: {
+        agresivo: ["Conseguilo ahora antes de que se agote.", "Precio limitado por tiempo.", "Ultimas unidades disponibles."],
+        emocional: ["Transforma tu vida desde hoy.", "Lo que siempre quisiste, ahora al alcance.", "Tu familia se lo merece."],
+        logico: ["Ahorra un 40% vs la competencia.", "Calidad comprobada por miles de clientes.", "Envio rapido y devolucion garantizada."],
+      },
+      beneficios: ["Calidad garantizada", "Envio rapido", "Soporte incluido"],
     };
   }
 }
@@ -215,7 +227,11 @@ export async function arquitectoNode(state: LandingState): Promise<Partial<Landi
   console.log("Arquitecto: Validando estructura final...");
   return {
     producto:         state.producto         || "Producto sin nombre",
-    copy_hero:        state.copy_hero        || "Tu solucion ideal te espera",
+    angulos:          state.angulos?.agresivo?.length ? state.angulos : {
+      agresivo: ["Conseguilo ahora.", "Oferta limitada.", "Actua ya."],
+      emocional: ["Cambia tu vida hoy.", "Tu momento es ahora.", "Lo mereces."],
+      logico: ["Mejor precio del mercado.", "Calidad comprobada.", "Sin riesgos."],
+    },
     precio_calculado: state.precio_calculado || 0,
     beneficios:       state.beneficios?.length ? state.beneficios : ["Calidad garantizada"],
     imagenes:         state.imagenes?.length  ? state.imagenes  : [],

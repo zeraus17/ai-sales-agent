@@ -60,7 +60,7 @@ app.post("/api/v1/generate-landing", async (req: Request, res: Response) => {
 
     const finalOutput = responseSchema.parse({
       producto:         result.producto         || "Producto sin nombre",
-      copy_hero:        result.copy_hero        || "",
+      angulos:          result.angulos          || { agresivo: [], emocional: [], logico: [] },
       precio_calculado: precioFinal,
       beneficios:       result.beneficios       || [],
       imagenes:         result.imagenes         || [],
@@ -177,7 +177,7 @@ wss.on("connection", (ws: WebSocket) => {
 
           const finalOutput = responseSchema.parse({
             producto:         result.producto         || "Producto sin nombre",
-            copy_hero:        result.copy_hero        || "",
+            angulos:          result.angulos          || { agresivo: [], emocional: [], logico: [] },
             precio_calculado: precioFinal,
             beneficios:       result.beneficios       || [],
             imagenes:         result.imagenes         || [],
