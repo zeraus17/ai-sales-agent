@@ -260,7 +260,14 @@ app.post("/api/v1/generate-landing", async (c) => {
     }
 
     // Estratega
-    const precio = calcularPrecioDropshipping(info.costo, 8, 0.40);
+    let precio = calcularPrecioDropshipping(info.costo, 8, 0.40);
+	const precioMatch = prompt.match(/\b(\d+(?:[.,]\d+)?)\b/);
+	if (precioMatch) {
+		const precioPersonalizado = parseFloat(precioMatch[1].replace(',', '.'));
+		if (!isNaN(precioPersonalizado) && precioPersonalizado >= 0) {
+			precio = precioPersonalizado;
+		}
+	}
 
     // Copywriter
     const copy = await copywriter(info.producto, info.descripcion, precio, prompt, c.env.GEMINI_API_KEY);
@@ -317,11 +324,35 @@ app.get("/ws", async (c) => {
         const prompt = msg.prompt || "";
         const url = msg.url_referencia || "";
 
-        send("status", { nodo: "investigador", mensaje: "Iniciando Scraping..." });
-        const info = await investigador(url, prompt);
+        let fromCache = false;
+let info: { producto: string; descripcion: string; markdown: string; imagenes: string[]; costo: number };
 
-        send("status", { nodo: "estratega", mensaje: "Calculando Pricing..." });
-        const precio = calcularPrecioDropshipping(info.costo, 8, 0.40);
+if (url) {
+  send("status", { nodo: "investigador", mensaje: "Buscando en cache..." });
+  const embeddingRes = await c.env.AI.run("@cf/baai/bge-base-en-v1.5", { text: url });
+  const embedding = Array.isArray(embeddingRes) ? embeddingRes[0] : (embeddingRes as { data: number[][] }).data[0];
+  const cached = await buscarEnCache(url, c.env.SUPABASE_URL, c.env.SUPABASE_KEY, embedding);
+  if (cached) {
+    info = cached;
+    fromCache = true;
+    send("status", { nodo: "investigador", mensaje: "Cache hit — saltando scraping." });
+  } else {
+    send("status", { nodo: "investigador", mensaje: "Iniciando Scraping..." });
+    info = await investigador(url, prompt);
+    await guardarEnCache(url, info.producto, info.descripcion, info.markdown, info.imagenes, info.costo, embedding, c.env.SUPABASE_URL, c.env.SUPABASE_KEY);
+  }
+} else {
+  send("status", { nodo: "investigador", mensaje: "Iniciando Scraping..." });
+  info = await investigador("", prompt);
+}
+
+send("status", { nodo: "estratega", mensaje: "Calculando Pricing..." });
+let precio = calcularPrecioDropshipping(info.costo, 8, 0.40);
+const precioMatch = prompt.match(/\b(\d+(?:[.,]\d+)?)\b/);
+if (precioMatch) {
+  const precioPersonalizado = parseFloat(precioMatch[1].replace(',', '.'));
+  if (!isNaN(precioPersonalizado) && precioPersonalizado >= 0) precio = precioPersonalizado;
+}
 
         send("status", { nodo: "copywriter", mensaje: "Generando Copy con IA..." });
         const copy = await copywriter(info.producto, info.descripcion, precio, prompt, c.env.GEMINI_API_KEY);
@@ -336,7 +367,7 @@ app.get("/ws", async (c) => {
           imagenes: info.imagenes,
         };
 
-        send("resultado", output);
+        send("resultado", { ...output, from_cache: fromCache });
         send("fin", { mensaje: "Motor 3Pod completado." });
       }
 
