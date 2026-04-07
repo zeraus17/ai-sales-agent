@@ -7,6 +7,7 @@ interface Env {
   GEMINI_API_KEY: string;
   SUPABASE_URL: string;
   SUPABASE_KEY: string;
+  AI: Ai;
 }
 
 interface Angulos {
@@ -156,6 +157,64 @@ Genera UNICAMENTE un JSON valido sin backticks:
   }
 }
 
+
+// ─── SUPABASE CACHE ───────────────────────────────────────────────────────────
+
+async function buscarEnCache(url: string, supabaseUrl: string, supabaseKey: string, embedding: number[]): Promise<{
+  producto: string;
+  descripcion: string;
+  markdown: string;
+  imagenes: string[];
+  costo: number;
+} | null> {
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/buscar_producto_similar`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ query_embedding: embedding, similarity_threshold: 0.85, match_count: 1 }),
+    });
+    const data = await res.json() as { producto: string; descripcion: string; markdown: string; imagenes: string[]; costo_estimado: number }[];
+    if (data.length > 0) {
+      console.log("[Cache] Hit:", data[0].producto);
+      return { ...data[0], costo: data[0].costo_estimado, imagenes: data[0].imagenes || [] };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function guardarEnCache(
+  url: string,
+  producto: string,
+  descripcion: string,
+  markdown: string,
+  imagenes: string[],
+  costo: number,
+  embedding: number[],
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<void> {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/productos_cache`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`,
+        "Prefer": "resolution=merge-duplicates",
+      },
+      body: JSON.stringify({ url, producto, descripcion, markdown, imagenes, costo_estimado: costo, embedding }),
+    });
+    console.log("[Cache] Guardado:", producto);
+  } catch (err) {
+    console.warn("[Cache] Error guardando:", err);
+  }
+}
 // ─── HONO APP ─────────────────────────────────────────────────────────────────
 
 const app = new Hono<{ Bindings: Env }>();
@@ -174,16 +233,39 @@ app.post("/api/v1/generate-landing", async (c) => {
 
     if (!prompt) return c.json({ error: "prompt requerido" }, 400);
 
-    // 1. Investigador
-    const info = await investigador(url_referencia || "", prompt);
+    let info: { producto: string; descripcion: string; markdown: string; imagenes: string[]; costo: number };
+    let fromCache = false;
 
-    // 2. Estratega
+    // Generar embedding de la URL para buscar en cache
+    if (url_referencia) {
+      const embeddingRes = await c.env.AI.run("@cf/baai/bge-base-en-v1.5", {
+        text: url_referencia,
+      });
+      const embedding = Array.isArray(embeddingRes) ? embeddingRes[0] : (embeddingRes as { data: number[][] }).data[0];
+
+      // Buscar en Supabase
+      const cached = await buscarEnCache(url_referencia, c.env.SUPABASE_URL, c.env.SUPABASE_KEY, embedding);
+      if (cached) {
+        info = cached;
+        fromCache = true;
+        console.log("[Cache] Hit — saltando scraping");
+      } else {
+        // Scraping
+        info = await investigador(url_referencia, prompt);
+        // Guardar en cache
+        await guardarEnCache(url_referencia, info.producto, info.descripcion, info.markdown, info.imagenes, info.costo, embedding, c.env.SUPABASE_URL, c.env.SUPABASE_KEY);
+      }
+    } else {
+      info = await investigador("", prompt);
+    }
+
+    // Estratega
     const precio = calcularPrecioDropshipping(info.costo, 8, 0.40);
 
-    // 3. Copywriter
+    // Copywriter
     const copy = await copywriter(info.producto, info.descripcion, precio, prompt, c.env.GEMINI_API_KEY);
 
-    // 4. Arquitecto
+    // Arquitecto
     const output: LandingOutput = {
       producto: info.producto,
       angulos: copy.angulos,
@@ -192,9 +274,10 @@ app.post("/api/v1/generate-landing", async (c) => {
       imagenes: info.imagenes,
     };
 
-    return c.json(output);
+    return c.json({ ...output, from_cache: fromCache });
 
   } catch (err) {
+    console.error(err);
     return c.json({ error: "Error en el motor" }, 500);
   }
 });
