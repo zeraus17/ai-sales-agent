@@ -5,23 +5,20 @@
     ? (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws'
     : '';
 
-  // Estado
   let ws: WebSocket | null = null;
   let connected = false;
   let generating = false;
   let currentResult: any = null;
   let regenHandler: ((msg: any) => void) | null = null;
 
-  // Inputs
   let threadId = 'session-1';
   let urlRef = '';
   let prompt = 'vender esto en Colombia';
+  let cacheEnabled = true;
 
-  // Historial y stats
   let stats = { generaciones: 0, cacheHits: 0 };
   let sessionHistory: any[] = [];
 
-  // Ángulos con historial de versiones
   let angles = {
     agresivo: [] as string[][],
     emocional: [] as string[][],
@@ -29,15 +26,12 @@
   };
   let currentVersion = { agresivo: 0, emocional: 0, logico: 0 };
 
-  // UI
   let logLines: { text: string; cls: string }[] = [];
   let showResults = false;
   let sidebarOpen = false;
   let toastMsg = '';
   let toastVisible = false;
   let exportDisabled = true;
-
-  // Regen state
   let regenLoading = { agresivo: false, emocional: false, logico: false };
 
   onMount(() => {
@@ -69,7 +63,7 @@
     showResults = false;
     generating = true;
     addLog('Iniciando motor 3Pod...');
-    const payload: any = { action: 'generar', thread_id: threadId, prompt };
+    const payload: any = { action: 'generar', thread_id: threadId, prompt, cache_enabled: cacheEnabled };
     if (urlRef) payload.url_referencia = urlRef;
     ws.send(JSON.stringify(payload));
   }
@@ -85,7 +79,7 @@
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     regenLoading = { ...regenLoading, [tipo]: true };
     addLog('Regenerando angulos ' + tipo + '...', 'active');
-    const payload: any = { action: 'generar', thread_id: 'regen-' + tipo + '-' + Date.now(), prompt: prompt + ' enfoque ' + tipo };
+    const payload: any = { action: 'generar', thread_id: 'regen-' + tipo + '-' + Date.now(), prompt: prompt + ' enfoque ' + tipo, cache_enabled: cacheEnabled };
     if (urlRef) payload.url_referencia = urlRef;
     ws.send(JSON.stringify(payload));
     regenHandler = (msg) => {
@@ -204,7 +198,6 @@
 </script>
 
 <div class="layout">
-  <!-- SIDEBAR -->
   <aside class="sidebar" class:open={sidebarOpen}>
     <div class="sidebar-header">
       <div class="sidebar-logo">3POD <span>// MOTOR DE LANDINGS</span></div>
@@ -225,17 +218,18 @@
         <div class="history-empty">Sin generaciones aún</div>
       {:else}
         {#each sessionHistory.slice().reverse() as item, i}
+          {@const realIdx = sessionHistory.length - 1 - i}
           <div class="history-item" class:active={i === 0}>
-            <div class="history-item-product" on:click={() => loadFromHistory(sessionHistory.length - 1 - i)} role="button" tabindex="0">{item.producto}</div>
+            <div class="history-item-product" on:click={() => loadFromHistory(realIdx)} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && loadFromHistory(realIdx)}>{item.producto}</div>
             <div class="history-item-meta">
-              <span>${item.precio_calculado}</span>
+              <span on:click={() => loadFromHistory(realIdx)} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && loadFromHistory(realIdx)}>${item.precio_calculado}</span>
               {#if item.from_cache}
                 <span class="cache-badge">CACHE</span>
               {:else}
                 <span class="fresh-badge">FRESH</span>
               {/if}
               <span class="meta-time">{new Date(item.ts).toLocaleTimeString()}</span>
-              <span class="delete-btn" on:click={() => deleteHistoryItem(sessionHistory.length - 1 - i)} role="button" tabindex="0">✕</span>
+              <span class="delete-btn" on:click={() => deleteHistoryItem(realIdx)} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && deleteHistoryItem(realIdx)}>✕</span>
             </div>
           </div>
         {/each}
@@ -248,10 +242,9 @@
   </aside>
 
   {#if sidebarOpen}
-    <div class="overlay" on:click={() => sidebarOpen = false} role="button" tabindex="0"></div>
+    <div class="overlay" on:click={() => sidebarOpen = false} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && (sidebarOpen = false)}></div>
   {/if}
 
-  <!-- MAIN -->
   <main class="main">
     <div class="container">
       <header class="header">
@@ -265,21 +258,20 @@
         </div>
       </header>
 
-      <!-- INPUT -->
       <div class="input-panel">
         <div class="panel-title">// configuración de entrada</div>
         <div class="fields">
           <div class="field">
-            <label>THREAD_ID</label>
-            <input type="text" bind:value={threadId}>
+            <label for="thread_id">THREAD_ID</label>
+            <input id="thread_id" type="text" bind:value={threadId}>
           </div>
           <div class="field">
-            <label>URL_REFERENCIA</label>
-            <input type="text" bind:value={urlRef} placeholder="https://...">
+            <label for="url_ref">URL_REFERENCIA</label>
+            <input id="url_ref" type="text" bind:value={urlRef} placeholder="https://...">
           </div>
           <div class="field">
-            <label>PROMPT</label>
-            <input type="text" bind:value={prompt}>
+            <label for="prompt_input">PROMPT</label>
+            <input id="prompt_input" type="text" bind:value={prompt}>
           </div>
         </div>
         <div class="actions">
@@ -289,10 +281,14 @@
           </button>
           <button class="btn btn-danger" disabled={!generating} on:click={detener}>DETENER</button>
           <button class="btn btn-export" disabled={exportDisabled} on:click={exportarResultado}>↓ EXPORTAR JSON</button>
+          <label class="cache-toggle">
+            <input type="checkbox" bind:checked={cacheEnabled}>
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">CACHE {cacheEnabled ? 'ON' : 'OFF'}</span>
+          </label>
         </div>
       </div>
 
-      <!-- LOG -->
       {#if logLines.length > 0}
         <div class="log">
           {#each logLines as line}
@@ -304,7 +300,6 @@
         </div>
       {/if}
 
-      <!-- RESULTS -->
       {#if showResults && currentResult}
         <div class="results">
           <div class="product-header">
@@ -324,7 +319,6 @@
             </div>
           </div>
 
-          <!-- ÁNGULOS -->
           <div class="angles-grid">
             {#each tipos as tipo}
               <div class="angle-column {tipo}">
@@ -338,7 +332,7 @@
                 </div>
                 <div class="angle-cards">
                   {#each angles[tipo][currentVersion[tipo]] || [] as frase}
-                    <div class="angle-card" on:click={() => copiar(frase)} role="button" tabindex="0">
+                    <div class="angle-card" on:click={() => copiar(frase)} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && copiar(frase)}>
                       <span>{frase}</span>
                       <span class="copy-hint">COPIAR</span>
                     </div>
@@ -353,7 +347,6 @@
             {/each}
           </div>
 
-          <!-- BOTTOM -->
           <div class="bottom-grid">
             <div class="info-panel">
               <div class="info-panel-title">// beneficios</div>
@@ -417,10 +410,10 @@
   .history-list { flex: 1; overflow-y: auto; padding: 0 12px 12px; }
   .history-list::-webkit-scrollbar { width: 3px; }
   .history-list::-webkit-scrollbar-thumb { background: var(--muted2); border-radius: 2px; }
-  .history-item { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+  .history-item { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; transition: all 0.2s; }
   .history-item:hover { border-color: rgba(0,229,255,0.2); }
   .history-item.active { border-color: var(--accent); background: rgba(0,229,255,0.05); }
-  .history-item-product { font-size: 0.82rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+  .history-item-product { font-size: 0.82rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; cursor: pointer; }
   .history-item-meta { display: flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--muted); }
   .cache-badge { background: rgba(184,255,87,0.1); color: var(--accent3); border: 1px solid rgba(184,255,87,0.2); border-radius: 4px; padding: 1px 5px; font-size: 0.55rem; }
   .fresh-badge { color: var(--accent); font-size: 0.55rem; }
@@ -461,6 +454,14 @@
   .btn-danger:disabled { opacity: 0.3; cursor: not-allowed; }
   .btn-export { background: transparent; color: var(--accent3); border: 1px solid rgba(184,255,87,0.3); font-size: 0.75rem; padding: 10px 16px; }
   .btn-export:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .cache-toggle { display: flex; align-items: center; cursor: pointer; gap: 8px; }
+  .cache-toggle input { display: none; }
+  .toggle-track { width: 36px; height: 20px; background: var(--muted2); border-radius: 10px; position: relative; transition: background 0.2s; flex-shrink: 0; }
+  .cache-toggle input:checked + .toggle-track { background: var(--accent); }
+  .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: left 0.2s; }
+  .cache-toggle input:checked + .toggle-track .toggle-thumb { left: 18px; }
+  .toggle-text { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--muted); letter-spacing: 0.1em; }
 
   .log { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; }
   .log-line { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--muted); padding: 3px 0; display: flex; align-items: center; gap: 10px; }
